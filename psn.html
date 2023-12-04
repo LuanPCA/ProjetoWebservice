@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PSN</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+        }
+
+        #catalogo,
+        #carrinhoDiv,
+        #historicoDiv {
+            margin-left: 20px;
+            margin-top: 20px;
+        }
+
+        #historicoDiv {
+            position: fixed;
+            top: 0;
+            right: 0;
+            padding: 10px;
+            background-color: #f0f0f0;
+            border: 1px solid #ccc;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="catalogo">
+        <h1>Catálogo de Jogos</h1>
+    </div>
+
+    <div id="carrinhoDiv">
+        <h1>Carrinho</h1>
+        <div id="carrinho">
+        </div>
+    </div>
+
+    <div id="historicoDiv">
+        <h2>Histórico</h2>
+        <div id="historico">
+        </div>
+    </div>
+
+    <script>
+        async function obterHistoricoDoServidor() {
+            const resposta = await fetch('http://localhost:3004/historico');
+            const historico = await resposta.json();
+            return historico;
+        }
+
+        async function exibirHistorico() {
+            const historicoDiv = document.getElementById('historico');
+            const historico = await obterHistoricoDoServidor();
+
+            historicoDiv.innerHTML = '';
+
+            historico.forEach(acao => {
+                const acaoDiv = document.createElement('div');
+                acaoDiv.innerHTML = `<p>${acao}</p>`;
+                historicoDiv.appendChild(acaoDiv);
+            });
+        }
+
+        setInterval(exibirHistorico, 1000);  // Atualiza o histórico a cada 1000 milissegundos (1 segundo)
+    </script>
+
+    <script>
+        async function obterCatalogoDoServidor() {
+            const resposta = await fetch('http://localhost:3001/produtos');
+            const catalogo = await resposta.json();
+            return catalogo;
+        }
+
+        async function obterCarrinhoDoServidor() {
+            const resposta = await fetch('http://localhost:3003/carrinho');
+            const carrinho = await resposta.json();
+            return carrinho;
+        }
+
+        async function exibirCatalogo() {
+            const catalogoDiv = document.getElementById('catalogo');
+            const catalogo = await obterCatalogoDoServidor();
+
+            catalogo.forEach(jogo => {
+                const jogoDiv = document.createElement('div');
+                jogoDiv.innerHTML = `
+                    <p>${jogo.nome} - ${jogo.empresa} - $${jogo.preco.toFixed(2)}</p>
+                    <button onclick="adicionarAoCarrinho(${jogo.id}, '${jogo.nome}', '${jogo.empresa}', ${jogo.preco})">Adicionar no carrinho</button>
+                `;
+                catalogoDiv.appendChild(jogoDiv);
+            });
+        }
+
+        async function exibirCarrinho() {
+            const carrinhoDiv = document.getElementById('carrinho');
+            const carrinho = await obterCarrinhoDoServidor();
+
+            carrinhoDiv.innerHTML = '';
+
+            carrinho.forEach(item => {
+                const produtoDiv = document.createElement('div');
+                produtoDiv.innerHTML = `
+                    <p>${item.nome} - ${item.empresa} - $${item.preco.toFixed(2)}</p>
+                    <button onclick="removerDoCarrinho(${item.produtoId})">Remover</button>
+                `;
+                carrinhoDiv.appendChild(produtoDiv);
+            });
+        }
+
+        async function adicionarAoCarrinho(produtoId, nome, empresa, preco) {
+            const carrinho = await obterCarrinhoDoServidor();
+
+            const produtoNoCarrinho = carrinho.find(item => item.produtoId === produtoId);
+
+            if (produtoNoCarrinho) {
+                console.log('Você já tem esse jogo no carrinho');
+            } else {
+                await fetch('http://localhost:3003/adicionar-ao-carrinho', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ produtoId, nome, empresa, preco, quantidade: 1 }),
+                });
+
+                console.log(`Produto: ${nome} da empresa: ${empresa} adicionado ao carrinho`);
+                exibirCarrinho(); 
+                registrarAcaoNoHistorico(`Adicionado ao carrinho - ${nome}`);
+            }
+        }
+
+        async function removerDoCarrinho(produtoId) {
+            const carrinho = await obterCarrinhoDoServidor();
+            const produto = carrinho.find(item => item.produtoId === produtoId);
+
+            if (produto) {
+                await fetch('http://localhost:3003/remover-do-carrinho', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ produtoId }),
+                });
+
+                console.log(`Produto removido do carrinho`);
+                exibirCarrinho();
+                registrarAcaoNoHistorico(`Removido do carrinho - ${produto.nome}`);
+            }
+        }
+
+        async function registrarAcaoNoHistorico(acao) {
+            await fetch('http://localhost:3004/registrar-acao', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ acao }),
+            });
+        }
+
+        exibirCatalogo();
+        exibirCarrinho();
+    </script>
+
+</body>
+</html>
